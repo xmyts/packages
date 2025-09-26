@@ -25,7 +25,7 @@ define Package/rblibtorrent
   CATEGORY:=Libraries
   TITLE:=C++ bittorrent library by Rasterbar Software
   URL:=https://www.libtorrent.org
-  DEPENDS:=+boost-libs +libatomic +libc +libgcc +libopenssl +libstdcpp +USE_GLIBC:libpthread
+  DEPENDS:=+boost +boost-system +libatomic +libc +libgcc +libopenssl +libstdcpp +USE_GLIBC:libpthread
   ABI_VERSION:=2.0
 endef
 
