@@ -1,0 +1,143 @@
+name: Update qBittorrent Components
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * 1'
+
+env:
+  SOURCE_REPO: 'sbwml/luci-app-qbittorrent'
+
+jobs:
+  update-components:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup Git
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+    - name: Clone source repository to system temp
+      run: |
+        echo "Cloning source repository to system temporary directory..."
+        cd "$RUNNER_TEMP"
+        git clone --depth 1 https://github.com/${{ env.SOURCE_REPO }}.git temp-source-repo
+        echo "Source repository cloned to: $RUNNER_TEMP/temp-source-repo"
+        echo "Temporary directory contents:"
+        ls -la "$RUNNER_TEMP/temp-source-repo" | head -10
+
+    - name: Remove old components
+      run: |
+        echo "Removing old component directories..."
+        echo "Before removal:"
+        ls -la net/ | grep qbittorrent || echo "qbittorrent not found"
+        ls -la libs/ | grep -E "qt6base|qt6tools|rblibtorrent" || echo "No target directories found"
+        
+        rm -rf net/qbittorrent
+        rm -rf libs/qt6base
+        rm -rf libs/qt6tools
+        rm -rf libs/rblibtorrent
+        
+        echo "After removal:"
+        ls -la net/ | grep qbittorrent || echo "qbittorrent removed"
+        ls -la libs/ | grep -E "qt6base|qt6tools|rblibtorrent" || echo "All target directories removed"
+
+    - name: Copy new components from system temp
+      run: |
+        echo "Copying new components from system temporary directory..."
+        
+        # 确保目标目录存在
+        mkdir -p net libs
+        
+        # 从系统临时目录复制组件
+        echo "Copying qbittorrent..."
+        cp -r "$RUNNER_TEMP/temp-source-repo/qbittorrent" net/
+        
+        echo "Copying qt6base..."
+        cp -r "$RUNNER_TEMP/temp-source-repo/qt6base" libs/
+        
+        echo "Copying qt6tools..."
+        cp -r "$RUNNER_TEMP/temp-source-repo/qt6tools" libs/
+        
+        echo "Copying rblibtorrent..."
+        cp -r "$RUNNER_TEMP/temp-source-repo/rblibtorrent" libs/
+        
+        echo "Copy completed"
+
+    - name: Verify copied components
+      run: |
+        echo "Verifying copied components..."
+        echo "=== net directory contents ==="
+        ls -la net/
+        echo "=== libs directory contents ==="
+        ls -la libs/
+        
+        [ -d "net/qbittorrent" ] && echo "✅ qbittorrent verified" || echo "❌ qbittorrent missing"
+        [ -d "libs/qt6base" ] && echo "✅ qt6base verified" || echo "❌ qt6base missing"
+        [ -d "libs/qt6tools" ] && echo "✅ qt6tools verified" || echo "❌ qt6tools missing"
+        [ -d "libs/rblibtorrent" ] && echo "✅ rblibtorrent verified" || echo "❌ rblibtorrent missing"
+
+    - name: Get source commit info
+      id: source_commit
+      run: |
+        cd "$RUNNER_TEMP/temp-source-repo"
+        echo "commit_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        echo "commit_full=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+        echo "Using source commit: $(git rev-parse --short HEAD)"
+
+    - name: Check git status before commit
+      run: |
+        echo "=== Git status before commit ==="
+        git status
+        echo "=== Git diff before commit ==="
+        git diff --name-status
+
+    - name: Commit all changes
+      run: |
+        echo "Committing all changes..."
+        
+        # 记录源commit
+        echo "${{ steps.source_commit.outputs.commit_full }}" > .qbit_source_commit
+        
+        # 添加所有文件
+        git add .
+        
+        echo "=== Files to be committed ==="
+        git status --porcelain
+        
+        # 强制提交所有更改
+        git commit -m "chore: update qBittorrent components
+        
+        - Update qbittorrent, qt6base, qt6tools, rblibtorrent
+        - Source: ${{ env.SOURCE_REPO }}
+        - Source commit: ${{ steps.source_commit.outputs.commit_short }}
+        - Automated update: $(date -u)"
+        
+        echo "Pushing changes..."
+        git push
+
+    - name: Create summary
+      run: |
+        echo "## Update Process Complete" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Component Status:**" >> $GITHUB_STEP_SUMMARY
+        [ -d "net/qbittorrent" ] && echo "- ✅ qbittorrent" >> $GITHUB_STEP_SUMMARY || echo "- ❌ qbittorrent" >> $GITHUB_STEP_SUMMARY
+        [ -d "libs/qt6base" ] && echo "- ✅ qt6base" >> $GITHUB_STEP_SUMMARY || echo "- ❌ qt6base" >> $GITHUB_STEP_SUMMARY
+        [ -d "libs/qt6tools" ] && echo "- ✅ qt6tools" >> $GITHUB_STEP_SUMMARY || echo "- ❌ qt6tools" >> $GITHUB_STEP_SUMMARY
+        [ -d "libs/rblibtorrent" ] && echo "- ✅ rblibtorrent" >> $GITHUB_STEP_SUMMARY || echo "- ❌ rblibtorrent" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Source:** ${{ env.SOURCE_REPO }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Source Commit:** ${{ steps.source_commit.outputs.commit_short }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Process:**" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Cloned source to system temporary directory" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Removed old components" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Copied new components from system temp" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Committed changes" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Temporary files automatically cleaned by system" >> $GITHUB_STEP_SUMMARY
